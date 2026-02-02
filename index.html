@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Timer Calculator (UTC)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+    body { font-family: Arial, sans-serif; padding: 16px; }
+    h2 { margin-bottom: 10px; }
+
+    .table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin-bottom: 12px;
+    }
+    table {
+        border-collapse: collapse;
+        min-width: 900px;
+        width: 100%;
+    }
+    th, td {
+        border: 1px solid #ccc;
+        padding: 6px;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    input[type="number"], input[type="text"] { width: 70px; }
+    input.memo { width: 120px; }
+    select { padding: 4px; }
+
+    button {
+        padding: 6px 10px;
+        font-size: 14px;
+        margin: 4px 2px;
+    }
+
+    .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+    }
+
+    .goal-box {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        align-items: flex-start;
+    }
+
+    .result {
+        margin-top: 16px;
+        white-space: pre-line;
+        font-weight: bold;
+        font-size: 14px;
+    }
+
+    .memo-box {
+        width: 100%;
+        height: 180px;
+        margin-top: 10px;
+        padding: 10px;
+        font-size: 14px;
+        resize: vertical;
+        box-sizing: border-box;
+    }
+
+    @media (max-width: 768px) {
+        body { padding: 10px; }
+        input[type="number"], input[type="text"] { width: 55px; }
+        input.memo { width: 90px; }
+        button { font-size: 13px; padding: 6px 8px; }
+        .memo-box { height: 240px; font-size: 15px; }
+    }
+</style>
+</head>
+
+<body>
+
+<h2>Timer Calculator (UTC)</h2>
+
+<div class="table-wrap">
+<table>
+    <thead>
+        <tr>
+            <th>Check</th>
+            <th>Name</th>
+            <th>Rally Time<br>(Min)</th>
+            <th>Castle(sec)</th>
+            <th>Turret1(sec)</th>
+            <th>Turret2(sec)</th>
+            <th>Turret3(sec)</th>
+            <th>Turret4(sec)</th>
+            <th>Memo</th>
+            <th>Del</th>
+        </tr>
+    </thead>
+    <tbody id="timerBody"></tbody>
+</table>
+</div>
+
+<div class="controls">
+    <button onclick="addRow()">+ Add</button>
+    <button onclick="removeChecked()">Remove Checked</button>
+</div>
+
+<br>
+<h4>Calculation Mode</h4>
+
+<div class="controls">
+    <label>
+        <input type="checkbox" id="useExtra" onclick="toggleMode(this)">
+        Fast Rally, Extra Time (sec)
+    </label>
+    <input type="number" id="extraSec" value="30">
+</div>
+
+<br>
+
+<div class="controls">
+    <label>
+        <input type="checkbox" id="useTarget" onclick="toggleMode(this)">
+        Arrival Time (HHmmss)
+    </label>
+    <input type="text" id="targetTime" placeholder="HHmmss">
+</div>
+
+<br><br><br>
+
+<div class="goal-box">
+    <label>
+        Goal :
+        <select id="goalType">
+            <option value="castle">Castle</option>
+            <option value="turret1">Turret1</option>
+            <option value="turret2">Turret2</option>
+            <option value="turret3">Turret3</option>
+            <option value="turret4">Turret4</option>
+        </select>
+    </label>
+    <button onclick="calculate()">Go</button>
+</div>
+
+<div class="result" id="result"></div>
+
+<button onclick="copyResult()">📋 Copy Result</button>
+
+<h3>Memo</h3>
+<textarea class="memo-box"></textarea>
+
+<script>
+function msg(ko, en) {
+    alert(`${ko}\n${en}`);
+}
+
+function pad(n) {
+    return String(n).padStart(2, '0');
+}
+
+function addRow() {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+        <td><input type="checkbox" class="chk"></td>
+        <td><input></td>
+        <td><input type="number"></td>
+        <td><input type="number"></td>
+        <td><input type="number"></td>
+        <td><input type="number"></td>
+        <td><input type="number"></td>
+        <td><input type="number"></td>
+        <td><input class="memo"></td>
+        <td><button onclick="removeRow(this)">X</button></td>
+    `;
+    document.getElementById("timerBody").appendChild(tr);
+}
+
+function removeRow(btn) {
+    btn.closest("tr").remove();
+}
+
+function removeChecked() {
+    document.querySelectorAll("#timerBody tr").forEach(row => {
+        if (row.querySelector(".chk").checked) row.remove();
+    });
+}
+
+function toggleMode(chk) {
+    document.getElementById("useExtra").checked = chk.id === "useExtra";
+    document.getElementById("useTarget").checked = chk.id === "useTarget";
+}
+
+function copyResult() {
+    const resultText = document.getElementById("result").innerText.trim();
+
+    if (!resultText) {
+        msg("복사할 결과가 없습니다.", "There is no result to copy.");
+        return;
+    }
+
+    navigator.clipboard.writeText(resultText).then(() => {
+        msg("결과가 클립보드에 복사되었습니다.", "Result has been copied to clipboard.");
+    }).catch(() => {
+        msg("복사에 실패했습니다.", "Copy failed.");
+    });
+}
+
+async function calculate() {
+    const goalType = document.getElementById("goalType").value;
+    const rows = document.querySelectorAll("#timerBody tr");
+    const goalIndex = { castle:3, turret1:4, turret2:5, turret3:6, turret4:7 };
+    let timers = [];
+
+    rows.forEach(row => {
+        if (!row.querySelector(".chk").checked) return;
+        const name = row.cells[1].querySelector("input").value || "-";
+        const rallyMin = parseInt(row.cells[2].querySelector("input").value || 0);
+        const marchSec = parseInt(row.cells[goalIndex[goalType]].querySelector("input").value || 0);
+        timers.push({ name, total: rallyMin * 60 + marchSec });
+    });
+
+    if (!timers.length) {
+        msg("체크된 대상이 없습니다.", "No selected rows.");
+        return;
+    }
+
+    if (document.getElementById("useTarget").checked) {
+        const t = document.getElementById("targetTime").value;
+        if (!/^\d{6}$/.test(t)) {
+            msg("도착 시간은 HHmmss 형식으로 입력하세요.", "Please enter arrival time in HHmmss format.");
+            return;
+        }
+
+        const now = new Date();
+        const targetUtc = new Date(Date.UTC(
+            now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+            +t.substr(0,2), +t.substr(2,2), +t.substr(4,2)
+        ));
+
+        let out = "=== Departure (UTC) ===\n";
+        timers.forEach(t => {
+            const d = new Date(targetUtc.getTime() - t.total * 1000);
+            out += `${t.name} → ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}\n`;
+        });
+        document.getElementById("result").innerText = out;
+        return;
+    }
+
+    if (document.getElementById("useExtra").checked) {
+        const extra = +document.getElementById("extraSec").value || 0;
+        const maxTimer = Math.max(...timers.map(t => t.total));
+        const arrival = new Date(Date.now() + (maxTimer + extra) * 1000);
+
+        let out = "=== Arrival (UTC) ===\n";
+        out += `${pad(arrival.getUTCHours())}:${pad(arrival.getUTCMinutes())}:${pad(arrival.getUTCSeconds())}\n\n`;
+        out += "=== Departure ===\n";
+
+        timers.forEach(t => {
+            const d = new Date(arrival.getTime() - t.total * 1000);
+            out += `${t.name} → ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}\n`;
+        });
+        document.getElementById("result").innerText = out;
+        return;
+    }
+
+    msg("계산 모드를 선택하세요.", "Please select a calculation mode.");
+}
+
+addRow();
+</script>
+
+</body>
+</html>
