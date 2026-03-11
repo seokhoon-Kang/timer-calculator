@@ -28,12 +28,12 @@
 
     input[type="number"], input[type="text"] { width: 70px; }
     input.memo { width: 120px; }
-    select { padding: 4px; }
 
     button {
         padding: 6px 10px;
         font-size: 14px;
         margin: 4px 2px;
+        cursor: pointer;
     }
 
     .controls {
@@ -43,11 +43,10 @@
         align-items: center;
     }
 
-    .target-box {
+    .goal-buttons {
         display: flex;
-        flex-direction: column;
-        gap: 6px;
-        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 8px;
     }
 
     .result {
@@ -114,7 +113,7 @@
         <input type="checkbox" id="useExtra" onclick="toggleMode(this)">
         Fast Rally, Extra Time (sec)
     </label>
-    <input type="number" id="extraSec" value="0">
+    <input type="number" id="extraSec" value="30">
 </div>
 
 <br>
@@ -127,20 +126,15 @@
     <input type="text" id="targetTime" placeholder="HHmmss">
 </div>
 
-<br><br><br>
+<br><br>
 
-<div class="target-box">
-    <label>
-        Target :
-        <select id="target">
-            <option value="castle">Castle</option>
-            <option value="turret1">Turret1</option>
-            <option value="turret2">Turret2</option>
-            <option value="turret3">Turret3</option>
-            <option value="turret4">Turret4</option>
-        </select>
-    </label>
-    <button onclick="calculate()">Go</button>
+<h4>Time Calculation</h4>
+<div class="goal-buttons">
+    <button onclick="calculateCastle()">Castle</button>
+    <button onclick="calculateTurret1()">Turret1</button>
+    <button onclick="calculateTurret2()">Turret2</button>
+    <button onclick="calculateTurret3()">Turret3</button>
+    <button onclick="calculateTurret4()">Turret4</button>
 </div>
 
 <div class="result" id="result"></div>
@@ -163,13 +157,13 @@ function addRow() {
     const tr = document.createElement("tr");
     tr.innerHTML = `
         <td><input type="checkbox" class="chk"></td>
-        <td><input></td>
-        <td><input type="number"></td>
-        <td><input type="number"></td>
-        <td><input type="number"></td>
-        <td><input type="number"></td>
-        <td><input type="number"></td>
-        <td><input type="number"></td>
+        <td><input class="name"></td>
+        <td><input type="number" class="rally"></td>
+        <td><input type="number" class="castle"></td>
+        <td><input type="number" class="turret1"></td>
+        <td><input type="number" class="turret2"></td>
+        <td><input type="number" class="turret3"></td>
+        <td><input type="number" class="turret4"></td>
         <td><input class="memo"></td>
         <td><button onclick="removeRow(this)">X</button></td>
     `;
@@ -206,18 +200,41 @@ function copyResult() {
     });
 }
 
-async function calculate() {
-    const target = document.getElementById("target").value;
+function calculateCastle() {
+    calculateByType("castle", "Castle");
+}
+
+function calculateTurret1() {
+    calculateByType("turret1", "Turret1");
+}
+
+function calculateTurret2() {
+    calculateByType("turret2", "Turret2");
+}
+
+function calculateTurret3() {
+    calculateByType("turret3", "Turret3");
+}
+
+function calculateTurret4() {
+    calculateByType("turret4", "Turret4");
+}
+
+function calculateByType(type, label) {
     const rows = document.querySelectorAll("#timerBody tr");
-    const targetIndex = { castle:3, turret1:4, turret2:5, turret3:6, turret4:7 };
     let timers = [];
 
     rows.forEach(row => {
         if (!row.querySelector(".chk").checked) return;
-        const name = row.cells[1].querySelector("input").value || "-";
-        const rallyMin = parseInt(row.cells[2].querySelector("input").value || 0);
-        const marchSec = parseInt(row.cells[targetIndex[target]].querySelector("input").value || 0);
-        timers.push({ name, total: rallyMin * 60 + marchSec });
+
+        const name = row.querySelector(".name").value || "-";
+        const rallyMin = parseInt(row.querySelector(".rally").value || 0, 10);
+        const marchSec = parseInt(row.querySelector("." + type).value || 0, 10);
+
+        timers.push({
+            name,
+            total: rallyMin * 60 + marchSec
+        });
     });
 
     if (!timers.length) {
@@ -226,40 +243,49 @@ async function calculate() {
     }
 
     if (document.getElementById("useTarget").checked) {
-        const t = document.getElementById("targetTime").value;
-        if (!/^\d{6}$/.test(t)) {
+        const targetValue = document.getElementById("targetTime").value;
+
+        if (!/^\d{6}$/.test(targetValue)) {
             msg("도착 시간은 HHmmss 형식으로 입력하세요.", "Please enter arrival time in HHmmss format.");
             return;
         }
 
         const now = new Date();
+        const hh = parseInt(targetValue.substring(0, 2), 10);
+        const mm = parseInt(targetValue.substring(2, 4), 10);
+        const ss = parseInt(targetValue.substring(4, 6), 10);
+
         const targetUtc = new Date(Date.UTC(
-            now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
-            +t.substr(0,2), +t.substr(2,2), +t.substr(4,2)
+            now.getUTCFullYear(),
+            now.getUTCMonth(),
+            now.getUTCDate(),
+            hh, mm, ss
         ));
 
-        let out = "=== Departure (UTC) ===\n";
-        timers.forEach(t => {
-            const d = new Date(targetUtc.getTime() - t.total * 1000);
-            out += `${t.name} → ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}\n`;
+        let out = `=== ${label} Departure (UTC) ===\n`;
+        timers.forEach(item => {
+            const d = new Date(targetUtc.getTime() - item.total * 1000);
+            out += `${item.name} → ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}\n`;
         });
+
         document.getElementById("result").innerText = out;
         return;
     }
 
     if (document.getElementById("useExtra").checked) {
-        const extra = +document.getElementById("extraSec").value || 0;
-        const maxTimer = Math.max(...timers.map(t => t.total));
+        const extra = parseInt(document.getElementById("extraSec").value || 0, 10);
+        const maxTimer = Math.max(...timers.map(item => item.total));
         const arrival = new Date(Date.now() + (maxTimer + extra) * 1000);
 
-        let out = "=== Arrival (UTC) ===\n";
+        let out = `=== ${label} Arrival (UTC) ===\n`;
         out += `${pad(arrival.getUTCHours())}:${pad(arrival.getUTCMinutes())}:${pad(arrival.getUTCSeconds())}\n\n`;
-        out += "=== Departure ===\n";
+        out += `=== ${label} Departure (UTC) ===\n`;
 
-        timers.forEach(t => {
-            const d = new Date(arrival.getTime() - t.total * 1000);
-            out += `${t.name} → ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}\n`;
+        timers.forEach(item => {
+            const d = new Date(arrival.getTime() - item.total * 1000);
+            out += `${item.name} → ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}\n`;
         });
+
         document.getElementById("result").innerText = out;
         return;
     }
@@ -272,7 +298,3 @@ addRow();
 
 </body>
 </html>
-
-
-
-
