@@ -70,7 +70,8 @@
     input[type="number"],
     input[type="text"],
     input.name,
-    input.memo {
+    input.memo,
+    select {
         height: 38px;
         border: 1px solid #cfcfcf;
         border-radius: 8px;
@@ -82,6 +83,10 @@
     input[type="number"],
     input[type="text"] {
         width: 78px;
+    }
+
+    select {
+        width: 84px;
     }
 
     input.name {
@@ -143,6 +148,22 @@
         align-items: center;
         gap: 8px;
         font-size: 14px;
+    }
+
+    .local-controls {
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .local-controls span {
+        font-size: 14px;
+    }
+
+    .utc-preview {
+        font-size: 13px;
+        color: #555;
     }
 
     .result {
@@ -226,7 +247,8 @@
         input[type="number"],
         input[type="text"],
         input.name,
-        input.memo {
+        input.memo,
+        select {
             height: 40px;
             font-size: 15px;
         }
@@ -234,6 +256,10 @@
         input[type="number"],
         input[type="text"] {
             width: 68px;
+        }
+
+        select {
+            width: 78px;
         }
 
         input.name {
@@ -252,7 +278,8 @@
 
         .controls,
         .goal-buttons,
-        .actions {
+        .actions,
+        .local-controls {
             gap: 6px;
         }
 
@@ -266,7 +293,8 @@
             align-items: flex-start;
         }
 
-        .mode-row label {
+        .mode-row label,
+        .local-controls span {
             font-size: 14px;
         }
 
@@ -294,6 +322,10 @@
         input[type="number"],
         input[type="text"] {
             width: 64px;
+        }
+
+        select {
+            width: 74px;
         }
 
         input.name {
@@ -349,21 +381,44 @@
 
         <div class="mode-row">
             <label>
-                <input type="checkbox" id="useExtra" onclick="toggleMode('extra')">
-                Fast Rally, Extra Time (sec)
+                <input type="checkbox" id="useExtraApi" onclick="toggleMode('useExtraApi')" checked>
+                Fast Rally(API), Extra Time (sec)
             </label>
-            <input type="number" id="extraSec" value="30">
+            <input type="number" id="extraSecApi" value="30">
         </div>
 
         <div class="mode-row">
             <label>
-                <input type="checkbox" id="useTarget" onclick="toggleMode('target')">
+                <input type="checkbox" id="useExtraLocal" onclick="toggleMode('useExtraLocal')">
+                Fast Rally(Local), Extra Time (sec)
+            </label>
+            <input type="number" id="extraSecLocal" value="30">
+
+            <div class="local-controls">
+                <select id="localAdjustSign" onchange="updateLocalUtcPreview()">
+                    <option value="-" selected>-</option>
+                    <option value="+">+</option>
+                </select>
+
+                <select id="localAdjustHour" onchange="updateLocalUtcPreview()"></select>
+                <span>Hour</span>
+
+                <select id="localAdjustMinute" onchange="updateLocalUtcPreview()"></select>
+                <span>Min</span>
+            </div>
+
+            <span class="utc-preview" id="localUtcPreview"></span>
+        </div>
+
+        <div class="mode-row">
+            <label>
+                <input type="checkbox" id="useTarget" onclick="toggleMode('useTarget')">
                 Arrival Time (HHmmss)
             </label>
             <input type="text" id="targetTime" placeholder="HHmmss">
         </div>
 
-        <div class="subtle"></div>
+        <div class="subtle">Local mode: 현재 로컬 시간에 선택한 시/분을 더하거나 뺀 뒤, 그 값을 UTC 기준 시간으로 사용합니다.</div>
     </div>
 
     <div class="card">
@@ -404,12 +459,38 @@ function formatUtcTime(date) {
     return `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`;
 }
 
+function formatUtcDateTime(date) {
+    return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())} UTC`;
+}
+
 function escapeHtml(str) {
     return String(str)
         .replace(/&/g, "&amp;")
-        .replace(/"/g, "&quot;")
+        .replace(/\"/g, "&quot;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
+}
+
+function populateTimeSelects() {
+    const hourSelect = document.getElementById("localAdjustHour");
+    const minuteSelect = document.getElementById("localAdjustMinute");
+
+    for (let i = 0; i < 24; i++) {
+        const option = document.createElement("option");
+        option.value = String(i);
+        option.textContent = pad(i);
+        hourSelect.appendChild(option);
+    }
+
+    for (let i = 0; i < 60; i++) {
+        const option = document.createElement("option");
+        option.value = String(i);
+        option.textContent = pad(i);
+        minuteSelect.appendChild(option);
+    }
+
+    hourSelect.value = "9";
+    minuteSelect.value = "0";
 }
 
 function addRow(data = {}) {
@@ -445,15 +526,31 @@ function removeChecked() {
     });
 }
 
-function toggleMode(mode) {
-    const useExtra = document.getElementById("useExtra");
-    const useTarget = document.getElementById("useTarget");
+function toggleMode(activeId) {
+    const ids = ["useExtraApi", "useExtraLocal", "useTarget"];
 
-    if (mode === "extra") {
-        useTarget.checked = false;
-    } else if (mode === "target") {
-        useExtra.checked = false;
-    }
+    ids.forEach(id => {
+        if (id !== activeId) {
+            document.getElementById(id).checked = false;
+        }
+    });
+
+    updateModeInputs();
+}
+
+function updateModeInputs() {
+    const useExtraApi = document.getElementById("useExtraApi").checked;
+    const useExtraLocal = document.getElementById("useExtraLocal").checked;
+    const useTarget = document.getElementById("useTarget").checked;
+
+    document.getElementById("extraSecApi").disabled = !useExtraApi;
+
+    document.getElementById("extraSecLocal").disabled = !useExtraLocal;
+    document.getElementById("localAdjustSign").disabled = !useExtraLocal;
+    document.getElementById("localAdjustHour").disabled = !useExtraLocal;
+    document.getElementById("localAdjustMinute").disabled = !useExtraLocal;
+
+    document.getElementById("targetTime").disabled = !useTarget;
 }
 
 function copyResult() {
@@ -510,6 +607,33 @@ function getTargetUtcDate(hhmmss) {
     ));
 }
 
+function getLocalModeUtcBase() {
+    const sign = document.getElementById("localAdjustSign").value;
+    const hour = parseInt(document.getElementById("localAdjustHour").value || "0", 10);
+    const minute = parseInt(document.getElementById("localAdjustMinute").value || "0", 10);
+    const totalMinutes = (hour * 60) + minute;
+    const diffMs = totalMinutes * 60 * 1000 * (sign === "+" ? 1 : -1);
+
+    const localNow = new Date();
+    const adjustedLocal = new Date(localNow.getTime() + diffMs);
+
+    return new Date(Date.UTC(
+        adjustedLocal.getFullYear(),
+        adjustedLocal.getMonth(),
+        adjustedLocal.getDate(),
+        adjustedLocal.getHours(),
+        adjustedLocal.getMinutes(),
+        adjustedLocal.getSeconds(),
+        adjustedLocal.getMilliseconds()
+    ));
+}
+
+function updateLocalUtcPreview() {
+    const preview = document.getElementById("localUtcPreview");
+    const utcBase = getLocalModeUtcBase();
+    preview.innerText = `Base UTC(Local): ${formatUtcDateTime(utcBase)}`;
+}
+
 function renderResult(text) {
     document.getElementById("result").innerText = text;
 }
@@ -523,9 +647,10 @@ function calculate(type, label) {
     }
 
     const useTarget = document.getElementById("useTarget").checked;
-    const useExtra = document.getElementById("useExtra").checked;
+    const useExtraApi = document.getElementById("useExtraApi").checked;
+    const useExtraLocal = document.getElementById("useExtraLocal").checked;
 
-    if (!useTarget && !useExtra) {
+    if (!useTarget && !useExtraApi && !useExtraLocal) {
         msg("계산 모드를 선택하세요.", "Please select a calculation mode.");
         return;
     }
@@ -535,8 +660,13 @@ function calculate(type, label) {
         return;
     }
 
-    if (useExtra) {
-        calculateByExtraTime(timers, label);
+    if (useExtraApi) {
+        calculateByExtraTimeApi(timers, label);
+        return;
+    }
+
+    if (useExtraLocal) {
+        calculateByExtraTimeLocal(timers, label);
     }
 }
 
@@ -560,14 +690,16 @@ function calculateByTargetTime(timers, label) {
     renderResult(out);
 }
 
-function calculateByExtraTime(timers, label) {
-    const extraSec = parseInt(document.getElementById("extraSec").value || "0", 10);
+function calculateByExtraTimeApi(timers, label) {
+    const extraSec = parseInt(document.getElementById("extraSecApi").value || "0", 10);
     const maxTimer = Math.max(...timers.map(item => item.total));
     const arrival = new Date(Date.now() + ((maxTimer + extraSec) * 1000));
 
-    let out = `=== ${label} Arrival (UTC) ===\n`;
-    out += `${formatUtcTime(arrival)}\n\n`;
-    out += `=== ${label} Departure (UTC) ===\n`;
+    //let out = `=== ${label} Arrival (UTC) ===\n`;
+    //out += `${formatUtcTime(arrival)}\n\n`;
+    //out += `=== ${label} Departure (UTC) ===\n`;
+
+    let out = `=== ${label} Departure (UTC) ===\n`;
 
     timers.forEach(item => {
         const departure = new Date(arrival.getTime() - (item.total * 1000));
@@ -577,7 +709,32 @@ function calculateByExtraTime(timers, label) {
     renderResult(out);
 }
 
+function calculateByExtraTimeLocal(timers, label) {
+    const extraSec = parseInt(document.getElementById("extraSecLocal").value || "0", 10);
+    const maxTimer = Math.max(...timers.map(item => item.total));
+    const baseUtcLocal = getLocalModeUtcBase();
+    const arrival = new Date(baseUtcLocal.getTime() + ((maxTimer + extraSec) * 1000));
+
+    //let out = `Base UTC(Local): ${formatUtcDateTime(baseUtcLocal)}\n\n`;
+    //out += `=== ${label} Arrival (UTC) ===\n`;
+    //out += `${formatUtcTime(arrival)}\n\n`;
+    //out += `=== ${label} Departure (UTC) ===\n`;
+
+    let out = `=== ${label} Departure (UTC) ===\n`;
+
+    timers.forEach(item => {
+        const departure = new Date(arrival.getTime() - (item.total * 1000));
+        out += `${item.name} → ${formatUtcTime(departure)}\n`;
+    });
+
+    renderResult(out);
+}
+
+populateTimeSelects();
 addRow();
+updateModeInputs();
+updateLocalUtcPreview();
+setInterval(updateLocalUtcPreview, 1000);
 </script>
 
 </body>
