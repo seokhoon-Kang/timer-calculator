@@ -472,24 +472,27 @@
     </div>
 
     <div class="card">
-        <h3>Elapsed Time Preview</h3>
+        <h3>Elapsed Time</h3>
 
         <div class="elapsed-controls">
             <label>
                 Min
-                <input type="number" id="elapsedMin" min="0" value="0" inputmode="numeric" oninput="updateElapsedPreview()">
+                <input type="number" id="elapsedMin" min="0" value="0" inputmode="numeric" oninput="updateElapsed()">
             </label>
 
             <label>
                 Sec
-                <input type="number" id="elapsedSec" min="0" value="0" inputmode="numeric" oninput="updateElapsedPreview()">
+                <input type="number" id="elapsedSec" min="0" value="0" inputmode="numeric" oninput="updateElapsed()">
             </label>
 
             <button type="button" id="elapsedFreezeBtn" onclick="toggleElapsedFreeze()">Freeze Time</button>
         </div>
 
         <div class="elapsed-result" id="elapsedResult"></div>
-        <div class="subtle">현재 시각 기준 예상 시간을 표시합니다. Freeze Time을 누르면 표시된 시간이 멈추고, Resume Time을 누르면 다시 갱신됩니다.</div>
+        <div class="subtle">
+            현재 시각 기준 예상 시간을 표시합니다. Freeze Time을 누르면 표시된 시간이 멈추고, Resume Time을 누르면 다시 갱신됩니다.<br>
+            This displays the expected time based on the current time. Press Freeze Time to stop the displayed time, and press Resume Time to start updating it again.
+        </div>
     </div>
 
 </div>
@@ -720,7 +723,7 @@ function updateElapsedFreezeControls() {
     if (button) button.innerText = elapsedPreviewFrozen ? "Resume Time" : "Freeze Time";
 }
 
-function updateElapsedPreview() {
+function updateElapsed() {
     const result = document.getElementById("elapsedResult");
     if (!result) return;
 
@@ -741,7 +744,7 @@ function toggleElapsedFreeze() {
         elapsedPreviewFrozen = false;
         frozenElapsedExpectedTime = null;
         updateElapsedFreezeControls();
-        updateElapsedPreview();
+        updateElapsed();
         return;
     }
 
@@ -751,7 +754,7 @@ function toggleElapsedFreeze() {
     elapsedPreviewFrozen = true;
 
     updateElapsedFreezeControls();
-    updateElapsedPreview();
+    updateElapsed();
 }
 
 function renderResult(text) {
@@ -855,9 +858,9 @@ addRow();
 updateModeInputs();
 updateLocalUtcPreview();
 updateElapsedFreezeControls();
-updateElapsedPreview();
+updateElapsed();
 setInterval(updateLocalUtcPreview, 1000);
-setInterval(updateElapsedPreview, 1000);
+setInterval(updateElapsed, 1000);
 </script>
 
 </body>
