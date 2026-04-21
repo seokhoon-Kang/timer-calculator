@@ -179,16 +179,36 @@
         background: #fafafa;
     }
 
-    .memo-box {
-        width: 100%;
-        min-height: 180px;
+    .elapsed-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
         margin-top: 10px;
-        padding: 12px;
+    }
+
+    .elapsed-controls label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
         font-size: 14px;
-        resize: vertical;
-        border: 1px solid #cfcfcf;
+    }
+
+    .elapsed-controls input[type="number"] {
+        width: 92px;
+    }
+
+    .elapsed-result {
+        margin-top: 12px;
+        white-space: pre-line;
+        font-weight: bold;
+        font-size: 15px;
+        line-height: 1.6;
+        border: 1px solid #d8d8d8;
         border-radius: 12px;
-        background: #fff;
+        padding: 14px;
+        min-height: 90px;
+        background: #fafafa;
     }
 
     .actions {
@@ -304,9 +324,18 @@
             min-height: 120px;
         }
 
-        .memo-box {
-            min-height: 220px;
+        .elapsed-controls {
+            align-items: flex-start;
+        }
+
+        .elapsed-controls label {
+            font-size: 14px;
+        }
+
+        .elapsed-result {
             font-size: 15px;
+            padding: 12px;
+            min-height: 100px;
         }
     }
 
@@ -418,7 +447,10 @@
             <input type="text" id="targetTime" placeholder="HHmmss">
         </div>
 
-        <div class="subtle">Local mode: 현재 로컬 시간에 선택한 시/분을 더하거나 뺀 뒤, 그 값을 UTC 기준 시간으로 사용합니다.</div>
+        <div class="subtle">
+            Local mode: 현재 로컬 시간에 선택한 시/분을 더하거나 뺀 뒤, 그 값을 UTC 기준 시간으로 사용합니다.<br>
+            Local mode: The selected hours/minutes are added to or subtracted from the current local time, and the adjusted value is used as the UTC base time.
+        </div>
     </div>
 
     <div class="card">
@@ -440,13 +472,32 @@
     </div>
 
     <div class="card">
-        <h3>Memo</h3>
-        <textarea class="memo-box"></textarea>
+        <h3>Elapsed Time Preview</h3>
+
+        <div class="elapsed-controls">
+            <label>
+                Min
+                <input type="number" id="elapsedMin" min="0" value="0" inputmode="numeric" oninput="updateElapsedPreview()">
+            </label>
+
+            <label>
+                Sec
+                <input type="number" id="elapsedSec" min="0" value="0" inputmode="numeric" oninput="updateElapsedPreview()">
+            </label>
+
+            <button type="button" id="elapsedFreezeBtn" onclick="toggleElapsedFreeze()">Freeze Time</button>
+        </div>
+
+        <div class="elapsed-result" id="elapsedResult"></div>
+        <div class="subtle">현재 시각 기준 예상 시간을 표시합니다. Freeze Time을 누르면 표시된 시간이 멈추고, Resume Time을 누르면 다시 갱신됩니다.</div>
     </div>
 
 </div>
 
 <script>
+let elapsedPreviewFrozen = false;
+let frozenElapsedExpectedTime = null;
+
 function msg(ko, en) {
     alert(ko + "\n" + en);
 }
@@ -461,6 +512,15 @@ function formatUtcTime(date) {
 
 function formatUtcDateTime(date) {
     return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())} UTC`;
+}
+
+function formatLocalDateTime(date) {
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())} Local`;
+}
+
+function getNonNegativeInt(value) {
+    const number = parseInt(value || "0", 10);
+    return Number.isFinite(number) && number > 0 ? number : 0;
 }
 
 function escapeHtml(str) {
@@ -634,6 +694,66 @@ function updateLocalUtcPreview() {
     preview.innerText = `Base UTC(Local): ${formatUtcDateTime(utcBase)}`;
 }
 
+function getElapsedInputValues() {
+    const minInput = document.getElementById("elapsedMin");
+    const secInput = document.getElementById("elapsedSec");
+
+    return {
+        minutes: getNonNegativeInt(minInput?.value),
+        seconds: getNonNegativeInt(secInput?.value)
+    };
+}
+
+function renderElapsedPreview(expectedTime) {
+    const result = document.getElementById("elapsedResult");
+
+    if (!result) return;
+
+    result.innerText = `=== Expected Time After Elapsed ===
+UTC: ${formatUtcDateTime(expectedTime)}
+Local: ${formatLocalDateTime(expectedTime)}`;
+}
+
+function updateElapsedFreezeControls() {
+    const button = document.getElementById("elapsedFreezeBtn");
+
+    if (button) button.innerText = elapsedPreviewFrozen ? "Resume Time" : "Freeze Time";
+}
+
+function updateElapsedPreview() {
+    const result = document.getElementById("elapsedResult");
+    if (!result) return;
+
+    if (elapsedPreviewFrozen && frozenElapsedExpectedTime) {
+        renderElapsedPreview(frozenElapsedExpectedTime);
+        return;
+    }
+
+    const { minutes, seconds } = getElapsedInputValues();
+    const totalSeconds = (minutes * 60) + seconds;
+    const expectedTime = new Date(Date.now() + (totalSeconds * 1000));
+
+    renderElapsedPreview(expectedTime);
+}
+
+function toggleElapsedFreeze() {
+    if (elapsedPreviewFrozen) {
+        elapsedPreviewFrozen = false;
+        frozenElapsedExpectedTime = null;
+        updateElapsedFreezeControls();
+        updateElapsedPreview();
+        return;
+    }
+
+    const { minutes, seconds } = getElapsedInputValues();
+    const totalSeconds = (minutes * 60) + seconds;
+    frozenElapsedExpectedTime = new Date(Date.now() + (totalSeconds * 1000));
+    elapsedPreviewFrozen = true;
+
+    updateElapsedFreezeControls();
+    updateElapsedPreview();
+}
+
 function renderResult(text) {
     document.getElementById("result").innerText = text;
 }
@@ -734,7 +854,10 @@ populateTimeSelects();
 addRow();
 updateModeInputs();
 updateLocalUtcPreview();
+updateElapsedFreezeControls();
+updateElapsedPreview();
 setInterval(updateLocalUtcPreview, 1000);
+setInterval(updateElapsedPreview, 1000);
 </script>
 
 </body>
