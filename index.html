@@ -453,6 +453,9 @@
 
                 <select id="localAdjustMinute" onchange="updateLocalUtcPreview()"></select>
                 <span>Min</span>
+
+                <select id="localAdjustSecond" onchange="updateLocalUtcPreview()"></select>
+                <span>Sec</span>
             </div>
 
             <span class="utc-preview" id="localUtcPreview"></span>
@@ -467,8 +470,8 @@
         </div>
 
         <div class="subtle">
-            Local mode: 현재 로컬 시간에 선택한 시/분을 더하거나 뺀 뒤, 그 값을 UTC 기준 시간으로 사용합니다.<br>
-            Local mode: The selected hours/minutes are added to or subtracted from the current local time, and the adjusted value is used as the UTC base time.
+            Local mode: 현재 로컬 시간에 선택한 시/분/초를 더하거나 뺀 뒤, 그 값을 UTC 기준 시간으로 사용합니다.<br>
+            Local mode: The selected hours/minutes/seconds are added to or subtracted from the current local time, and the adjusted value is used as the UTC base time.
         </div>
     </div>
 
@@ -494,15 +497,21 @@
         <h3>Elapsed Time</h3>
 
         <div class="elapsed-controls">
-            <label>
-                Min
-                <input type="number" id="elapsedMin" min="0" value="0" inputmode="numeric" oninput="updateElapsedPreview()">
-            </label>
+            <div class="local-controls">
+                <select id="elapsedAdjustSign" onchange="updateElapsedPreview()">
+                    <option value="+" selected>+</option>
+                    <option value="-">-</option>
+                </select>
 
-            <label>
-                Sec
-                <input type="number" id="elapsedSec" min="0" value="0" inputmode="numeric" oninput="updateElapsedPreview()">
-            </label>
+                <select id="elapsedAdjustHour" onchange="updateElapsedPreview()"></select>
+                <span>Hour</span>
+
+                <select id="elapsedAdjustMinute" onchange="updateElapsedPreview()"></select>
+                <span>Min</span>
+
+                <select id="elapsedAdjustSecond" onchange="updateElapsedPreview()"></select>
+                <span>Sec</span>
+            </div>
 
             <span class="elapsed-preview-inline utc-preview" id="elapsedPreviewInline"></span>
         </div>
@@ -515,7 +524,7 @@
 
             <label>
                 March Time
-                <input type="text" id="manualMarchTime" placeholder="sec">
+                <input type="text" id="manualMarchTime" placeholder="hh:mm:ss or mm:ss or sec">
             </label>
 
             <label>
@@ -533,8 +542,8 @@
         </div>
 
         <div class="subtle">
-            미리보기는 현재 시각 + elapsed Min/Sec 값을 실시간으로 표시합니다. Calculate 버튼은 누른 순간을 기준으로 행군 시간 + elapsedMin + elapsedSec 후의 시간을 고정해서 표시합니다.<br>
-            The preview above updates in real time using the current time + elapsed Min/Sec. The Calculate button below fixes the result based on the exact moment you click it and adds march time + elapsedMin + elapsedSec.
+            미리보기는 현재 시각에 +/- Hour, Min, Sec 를 적용한 UTC / Local 시간을 실시간으로 표시합니다. Calculate 버튼은 누른 순간을 기준으로 행군 시간 + elapsedMin + elapsedSec 후의 시간을 고정해서 표시합니다.<br>
+            The preview above updates in real time by applying +/- Hour, Min, and Sec to the current time and showing the UTC / Local result. The Calculate button below fixes the result based on the exact moment you click it and adds march time + elapsedMin + elapsedSec.
         </div>
     </div>
 
@@ -574,26 +583,34 @@ function escapeHtml(str) {
         .replace(/>/g, "&gt;");
 }
 
+function populateNumberSelect(selectId, max, defaultValue = 0) {
+    const select = document.getElementById(selectId);
+
+    if (!select) return;
+
+    select.innerHTML = "";
+
+    for (let i = 0; i < max; i++) {
+        const option = document.createElement("option");
+        option.value = String(i);
+        option.textContent = pad(i);
+        select.appendChild(option);
+    }
+
+    select.value = String(defaultValue);
+}
+
 function populateTimeSelects() {
-    const hourSelect = document.getElementById("localAdjustHour");
-    const minuteSelect = document.getElementById("localAdjustMinute");
+    populateNumberSelect("localAdjustHour", 24, 9);
+    populateNumberSelect("localAdjustMinute", 60, 0);
+    populateNumberSelect("localAdjustSecond", 60, 0);
 
-    for (let i = 0; i < 24; i++) {
-        const option = document.createElement("option");
-        option.value = String(i);
-        option.textContent = pad(i);
-        hourSelect.appendChild(option);
-    }
+    populateNumberSelect("elapsedAdjustHour", 24, 0);
+    populateNumberSelect("elapsedAdjustMinute", 60, 0);
+    populateNumberSelect("elapsedAdjustSecond", 60, 0);
 
-    for (let i = 0; i < 60; i++) {
-        const option = document.createElement("option");
-        option.value = String(i);
-        option.textContent = pad(i);
-        minuteSelect.appendChild(option);
-    }
-
-    hourSelect.value = "9";
-    minuteSelect.value = "0";
+    const elapsedSign = document.getElementById("elapsedAdjustSign");
+    if (elapsedSign) elapsedSign.value = "+";
 }
 
 function addRow(data = {}) {
@@ -652,6 +669,7 @@ function updateModeInputs() {
     document.getElementById("localAdjustSign").disabled = !useExtraLocal;
     document.getElementById("localAdjustHour").disabled = !useExtraLocal;
     document.getElementById("localAdjustMinute").disabled = !useExtraLocal;
+    document.getElementById("localAdjustSecond").disabled = !useExtraLocal;
 
     document.getElementById("targetTime").disabled = !useTarget;
 }
@@ -714,8 +732,9 @@ function getLocalModeUtcBase() {
     const sign = document.getElementById("localAdjustSign").value;
     const hour = parseInt(document.getElementById("localAdjustHour").value || "0", 10);
     const minute = parseInt(document.getElementById("localAdjustMinute").value || "0", 10);
-    const totalMinutes = (hour * 60) + minute;
-    const diffMs = totalMinutes * 60 * 1000 * (sign === "+" ? 1 : -1);
+    const second = parseInt(document.getElementById("localAdjustSecond").value || "0", 10);
+    const totalSeconds = (hour * 3600) + (minute * 60) + second;
+    const diffMs = totalSeconds * 1000 * (sign === "+" ? 1 : -1);
 
     const localNow = new Date();
     const adjustedLocal = new Date(localNow.getTime() + diffMs);
@@ -738,12 +757,11 @@ function updateLocalUtcPreview() {
 }
 
 function getElapsedInputValues() {
-    const minInput = document.getElementById("elapsedMin");
-    const secInput = document.getElementById("elapsedSec");
-
     return {
-        minutes: getNonNegativeInt(minInput?.value),
-        seconds: getNonNegativeInt(secInput?.value)
+        sign: document.getElementById("elapsedAdjustSign")?.value || "+",
+        hours: getNonNegativeInt(document.getElementById("elapsedAdjustHour")?.value),
+        minutes: getNonNegativeInt(document.getElementById("elapsedAdjustMinute")?.value),
+        seconds: getNonNegativeInt(document.getElementById("elapsedAdjustSecond")?.value)
     };
 }
 
@@ -758,9 +776,10 @@ Local: ${formatLocalDateTime(expectedTime)}`;
 }
 
 function updateElapsedPreview() {
-    const { minutes, seconds } = getElapsedInputValues();
-    const totalSeconds = (minutes * 60) + seconds;
-    const expectedTime = new Date(Date.now() + (totalSeconds * 1000));
+    const { sign, hours, minutes, seconds } = getElapsedInputValues();
+    const totalSeconds = (hours * 3600) + (minutes * 60) + seconds;
+    const direction = sign === "-" ? -1 : 1;
+    const expectedTime = new Date(Date.now() + (totalSeconds * 1000 * direction));
 
     renderElapsedPreview(expectedTime);
 }
