@@ -770,8 +770,7 @@ function renderElapsedPreview(expectedTime) {
 
     if (!preview) return;
 
-    preview.innerText = `=== Expected Time After Elapsed ===
-UTC: ${formatUtcDateTime(expectedTime)}
+    preview.innerText = `UTC: ${formatUtcDateTime(expectedTime)}
 Local: ${formatLocalDateTime(expectedTime)}`;
 }
 
